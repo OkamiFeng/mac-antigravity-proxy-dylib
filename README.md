@@ -22,6 +22,7 @@
 - [本地测试 / Test](#本地测试--test)
 - [故障排查 / Troubleshooting](#故障排查--troubleshooting)
 - [限制 / Limitations](#限制--limitations)
+- [打赏支持 / Donate](#打赏支持--donate)
 - [许可证 / License](#许可证--license)
 
 ---
@@ -305,6 +306,16 @@ tail -n 120 ~/Library/Logs/Antigravity/language_server.log
 - 如果 Antigravity 使用 Network.framework、内置 DNS、DoH 或不经过 libc socket API 的路径，可能绕过 hook。
 - 首次启动需要复制完整 Antigravity，可能需要等待一段时间。
 - Builder App 目前是 ad-hoc signed；公开分发时建议进一步做 Developer ID 签名和 notarization。
+
+---
+
+## 打赏支持 / Donate
+
+如果这个项目帮到了你，可以用支付宝打赏支持。
+
+<p align="center">
+  <img src="assets/alipay-qrcode.jpg" width="260" alt="支付宝收款码">
+</p>
 
 ---
 
