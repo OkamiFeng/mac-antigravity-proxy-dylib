@@ -10,6 +10,7 @@ Antigravity-Proxy.app/
 *.tar
 *.tar.gz
 *.tgz
+*.dmg
 
 # Logs and local runtime files
 *.log

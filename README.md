@@ -4,9 +4,9 @@
   <img src="icon.png" width="160" alt="Antigravity-Proxy icon">
 </p>
 
-专为 macOS 上的 Antigravity 准备：在不打开 Clash TUN 的情况下，尽量让 Antigravity 走本机代理。
+专为 macOS 上的 Antigravity 准备：在不打开 Clash TUN 的情况下，让 Antigravity 尽量走本机代理。
 
-本项目的整体思路参考 Windows 项目 [yuaotian/antigravity-proxy](https://github.com/yuaotian/antigravity-proxy)：通过注入组件拦截网络连接，让 Antigravity 相关流量透明转发到本机代理。区别是 Windows 版使用 DLL 注入，macOS 版使用 `DYLD_INSERT_LIBRARIES` 注入 dylib，并生成一个可双击启动的 `Antigravity-Proxy.app`。
+本项目整体思路参考 Windows 项目 [yuaotian/antigravity-proxy](https://github.com/yuaotian/antigravity-proxy)：通过注入组件拦截网络连接，让 Antigravity 相关流量透明转发到本机代理。区别是 Windows 版使用 DLL 注入，macOS 版使用 `DYLD_INSERT_LIBRARIES` 注入 dylib。
 
 ---
 
@@ -28,15 +28,19 @@
 
 ## 项目介绍 / Introduction
 
-mac-antigravity-proxy 会从 `/Applications/Antigravity.app` 复制一份 Antigravity，生成代理版：
+Release 里发布的是一个很小的 `Antigravity-Proxy.app` Builder App。它**不包含** Google 原版 `Antigravity.app`。
 
-```text
-Antigravity-Proxy.app
-```
+运行时它会在用户本机做这些事：
 
-生成后的 App 可以直接双击，也可以移动到 `/Applications` 文件夹里使用。原版 `/Applications/Antigravity.app` 不会被修改。
+1. 检查代理端口是否可连接。
+2. 从 `/Applications/Antigravity.app` 复制一份原版 Antigravity。
+3. 在 `~/Library/Application Support/Antigravity Proxy/Runtime/` 里生成 runtime 代理版。
+4. 注入代理 dylib、写入代理环境变量、替换图标、重签名。
+5. 启动生成出来的代理版 Antigravity。
 
-它主要解决这些场景：
+原版 `/Applications/Antigravity.app` 不会被修改。
+
+适用场景：
 
 - Antigravity 不读取 macOS system proxy。
 - Clash Verge 开启 system proxy 后，Antigravity 仍然无法登录或无法连接。
@@ -48,102 +52,79 @@ Antigravity-Proxy.app
 
 ## 快速开始 / Quick Start
 
-> 只想让 Antigravity 立刻能用，看这一节就够了。
+### Step 1: 安装原版 Antigravity
 
-### Step 1: 确认 Antigravity 和代理
+请先确认原版 Antigravity 已安装在：
 
-请先确认：
-
-- Antigravity 已安装在 `/Applications/Antigravity.app`。
-- Clash Verge 或其他代理软件正在运行。
-- 已安装 Xcode Command Line Tools：
-
-```bash
-xcode-select --install
+```text
+/Applications/Antigravity.app
 ```
 
-### Step 2: 生成 Antigravity-Proxy.app
+### Step 2: 下载 Antigravity-Proxy.app
+
+到本仓库 [Releases](https://github.com/OkamiFeng/mac-antigravity-proxy-dylib/releases) 下载 `Antigravity-Proxy.app` 或 DMG。
+
+这个 App 是 Builder App，不内置 Google Antigravity，所以体积很小。
+
+### Step 3: 第一次打开并配置端口
+
+第一次双击 `Antigravity-Proxy.app` 会显示端口配置界面。
 
 #### 情况 A：你的 Clash 端口是 7890
 
-如果你使用 Clash Verge 默认 mixed port `7890`，直接运行：
+如果你使用 Clash Verge 默认 mixed port `7890`：
 
-```bash
-./prepare-app-copy.sh --replace
-```
+- Host：`127.0.0.1`
+- SOCKS5 端口：`7890`
+- 环境变量协议：`http`
+- 环境变量端口：`7890`
 
-脚本会使用：
-
-- dylib hook 代理：`socks5://127.0.0.1:7890`
-- 子进程环境变量代理：`http://127.0.0.1:7890`
-
-这是 Clash Verge 默认 mixed port 下最省事的配置。
-
-如果你也是 `7890` 端口，并且不想自己构建或生成 App，可以直接到本仓库的 [Releases](https://github.com/OkamiFeng/mac-antigravity-proxy-dylib/releases) 下载我构建好的 `Antigravity-Proxy.app`，解压后双击即用。
+直接保存并启动即可。
 
 #### 情况 B：你的 Clash 端口不是 7890
 
 如果你使用的是其他 mixed port，例如 `7893`：
 
-```bash
-./prepare-app-copy.sh --replace \
-  --proxy socks5://127.0.0.1:7893 \
-  --env-proxy http://127.0.0.1:7893
-```
+- Host：`127.0.0.1`
+- SOCKS5 端口：`7893`
+- 环境变量协议：`http`
+- 环境变量端口：`7893`
 
 如果你使用的是独立 SOCKS5 端口，例如 `7891`：
 
-```bash
-./prepare-app-copy.sh --replace \
-  --proxy socks5://127.0.0.1:7891 \
-  --env-proxy socks5://127.0.0.1:7891
-```
+- Host：`127.0.0.1`
+- SOCKS5 端口：`7891`
+- 环境变量协议：`socks5`
+- 环境变量端口：`7891`
 
-参数说明：
+### Step 4: 以后直接双击
 
-- `--proxy`：给 dylib hook 使用，目前需要 SOCKS5。
-- `--env-proxy`：写入 `HTTP_PROXY/HTTPS_PROXY/ALL_PROXY`，用于覆盖不走 hook 的子进程。
-- `--replace`：删除已有 `Antigravity-Proxy.app` 后重新生成。
+配置保存后，以后直接双击 `Antigravity-Proxy.app`。
 
-### Step 3: 启动
+每次启动时它会：
 
-生成完成后，直接双击当前目录里的：
+- 检查配置的代理端口是否可连接。
+- 如果端口可用，自动从本机原版 Antigravity 生成 runtime 代理版并启动。
+- 如果端口不可用，重新显示配置界面。
 
-```text
-Antigravity-Proxy.app
-```
-
-也可以把它移动到 `/Applications`：
-
-```bash
-mv Antigravity-Proxy.app /Applications/
-```
-
-之后双击 `/Applications/Antigravity-Proxy.app` 即可。App 运行所需的内层 Antigravity 副本、dylib、配置和图标都已经包含在 bundle 内部。
+你也可以把 `Antigravity-Proxy.app` 放到 `/Applications` 里使用。
 
 ---
 
 ## 自定义图标 / Custom Icon
 
-仓库里的 `icon.png` 就是生成 `Antigravity-Proxy.app` 时使用的图标。
+仓库里的 `icon.png` 是 Builder App 和生成出来的 runtime 代理版使用的图标。
 
 如果你想换成自己的图标：
 
 1. 用新的 PNG 图片替换仓库根目录的 `icon.png`。
-2. 重新生成 App：
+2. 重新构建：
 
 ```bash
-./prepare-app-copy.sh --replace
+./build.sh
 ```
 
-脚本会自动把 `icon.png` 转成 `.icns`，并写入：
-
-- 外层 `Antigravity-Proxy.app`。
-- 内层 Antigravity 副本。
-- Electron Helper。
-- 内层 `app.asar` 的根目录 `icon.png`。
-
-最后一步是为了避免 Electron 加载完成后调用 `app.dock.setIcon(.../icon.png)`，把 Dock 图标切回原版图标。
+脚本会自动把 `icon.png` 转成 `.icns`，并写入 Builder App。运行时 Builder App 还会把同一个图标写入 runtime 代理版、内层 Antigravity 副本、Electron Helper 和内层 `app.asar`。
 
 如果 macOS 仍显示旧图标，可能是图标缓存，可以退出 Antigravity 后运行：
 
@@ -155,44 +136,56 @@ killall Dock
 
 ## 更新 Antigravity / Update
 
-代理版 App 内部包含一份 Antigravity 副本，所以 Antigravity 更新后建议这样做：
+Antigravity 更新后，不需要重新下载 Builder App。
+
+推荐流程：
 
 1. 先用原版 `/Applications/Antigravity.app` 完成更新。
 2. 退出 Antigravity。
-3. 重新生成代理版：
+3. 再双击 `Antigravity-Proxy.app`。
 
-```bash
-./prepare-app-copy.sh --replace
-```
-
-不建议依赖代理版内部副本自动更新。
+Builder App 会从本机已更新的原版 Antigravity 重新生成 runtime 代理版。
 
 ---
 
 ## 停止后台进程 / Stop
 
-正常关闭代理版窗口后，launcher 会自动退出后台进程。
+正常关闭 Antigravity 窗口后，runtime launcher 会自动退出后台进程。
 
-如果遇到当前目录生成的代理版 App 残留后台进程，可以运行：
+如果遇到残留进程，可以在源码目录运行：
 
 ```bash
 ./stop-antigravity-proxy.sh
 ```
 
-如果你已经把 App 移动到 `/Applications`，通常直接从菜单栏退出 Antigravity 即可；上面的停止脚本主要面向仓库目录里生成的 `Antigravity-Proxy.app`。
+如果你只使用 Release 下载的 Builder App，通常从菜单栏退出 Antigravity 即可。
 
 ---
 
 ## 工作原理 / How It Works
 
-`prepare-app-copy.sh` 会做这些事：
+Builder App 自身只包含：
 
-- 从 `/Applications/Antigravity.app` 复制一份 Antigravity 到 `Antigravity-Proxy.app/Contents/Resources/Antigravity.app`。
-- 构建并放入 `libantigravity_proxy.dylib`。
-- 构建并放入 `AntigravityProxyLauncher` 作为外层 App 的入口。
+- `AntigravityProxyBuilder`：SwiftUI 配置界面和 runtime 生成器。
+- `AntigravityProxyLauncher`：runtime 代理版的入口。
+- `libantigravity_proxy.dylib`：网络 hook 动态库。
+- `icon.png` / `.icns`：代理版图标。
+
+运行时生成的 runtime 代理版位于：
+
+```text
+~/Library/Application Support/Antigravity Proxy/Runtime/Antigravity-Proxy.app
+```
+
+runtime 生成步骤：
+
+- 从 `/Applications/Antigravity.app` 复制一份 Antigravity。
+- 放入 `libantigravity_proxy.dylib`。
+- 放入 `AntigravityProxyLauncher` 作为 runtime App 的入口。
 - 对内层 Antigravity 副本做 ad-hoc 重签名，添加允许 `DYLD_INSERT_LIBRARIES` 的 entitlement。
-- 写入 `proxy.env`，双击 App 时自动设置代理环境变量。
+- 写入 `proxy.env`，启动时自动设置代理环境变量。
 - 替换外层、内层和 Electron Helper 的图标。
+- Patch 内层 `app.asar` 里的根目录 `icon.png`，避免 Dock 图标加载后切回原版图标。
 
 注入库主要拦截：
 
@@ -205,19 +198,36 @@ killall Dock
 
 macOS 上的 Antigravity 原版 App 开启了 hardened runtime，并且没有允许动态库注入所需的 entitlement。直接对 `/Applications/Antigravity.app` 使用 `DYLD_INSERT_LIBRARIES` 通常会被系统拦截。
 
-所以本项目不修改原版 App，而是生成一份代理版副本。
+所以本项目不修改原版 App，而是在用户本机生成一份 runtime 代理版。
 
 ---
 
 ## 本地构建 / Build
 
-`prepare-app-copy.sh` 会在缺少构建产物时自动运行 `build.sh`。也可以手动构建：
+需要 Xcode Command Line Tools：
+
+```bash
+xcode-select --install
+```
+
+构建：
 
 ```bash
 ./build.sh
 ```
 
-生成物位于 `build/`，不会提交到 Git。
+产物：
+
+```text
+build/Antigravity-Proxy.app
+build/libantigravity_proxy.dylib
+build/AntigravityProxyLauncher
+build/test_client
+```
+
+`build/Antigravity-Proxy.app` 是可发布的小型 Builder App，不包含原版 Antigravity。
+
+源码里仍保留 `prepare-app-copy.sh`，它用于开发/调试时手动生成完整 runtime 副本；普通用户不需要运行它。
 
 ---
 
@@ -249,6 +259,14 @@ captured login.example.test:443
 
 ## 故障排查 / Troubleshooting
 
+### 打开后显示端口配置界面
+
+说明 Builder App 没有连上配置的代理端口。请确认：
+
+- Clash Verge 或其他代理软件正在运行。
+- 端口配置和 Clash 设置一致。
+- 如果是 Clash Verge 默认 mixed port，通常填写 `127.0.0.1:7890`，环境变量协议用 `http`。
+
 ### GUI 仍显示需要登录
 
 先看 Clash 日志中这些域名是否走代理：
@@ -265,13 +283,7 @@ captured login.example.test:443
 tail -n 120 ~/Library/Logs/Antigravity/language_server.log
 ```
 
-如果日志里出现 `dial tcp ... i/o timeout`，通常说明 Go 子进程没有拿到代理环境变量。优先使用 Clash mixed port，并明确传入 `--env-proxy`：
-
-```bash
-./prepare-app-copy.sh --replace \
-  --proxy socks5://127.0.0.1:7890 \
-  --env-proxy http://127.0.0.1:7890
-```
+如果日志里出现 `dial tcp ... i/o timeout`，通常说明 Go 子进程没有拿到代理环境变量。重新打开 Builder App，把环境变量协议和端口改成 Clash mixed port 对应的 HTTP 代理，例如 `http://127.0.0.1:7890`。
 
 ### 原版 Antigravity 打不开
 
@@ -289,10 +301,10 @@ tail -n 120 ~/Library/Logs/Antigravity/language_server.log
 
 - 只处理 TCP `connect()`，不处理 UDP/QUIC。
 - dylib hook 目前只支持 SOCKS5 代理。
-- `--proxy` 的代理地址建议使用数字 IP，例如 `127.0.0.1`。
+- 代理地址建议使用数字 IP，例如 `127.0.0.1`。
 - 如果 Antigravity 使用 Network.framework、内置 DNS、DoH 或不经过 libc socket API 的路径，可能绕过 hook。
-- 代理版 App 是重签名副本，自动更新不可靠；更新请优先走原版 App 后重新生成代理版。
-- 自动退出后台进程依赖窗口检测，macOS 可能提示授予自动化权限。
+- 首次启动需要复制完整 Antigravity，可能需要等待一段时间。
+- Builder App 目前是 ad-hoc signed；公开分发时建议进一步做 Developer ID 签名和 notarization。
 
 ---
 
