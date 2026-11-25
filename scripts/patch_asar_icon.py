@@ -46,9 +46,12 @@ def main() -> None:
     original = args.asar.read_bytes()
     json_size = read_u32(original, 12)
     header_start = 16
-    header_end = header_start + json_size
-    data_start = header_end
-    header = json.loads(original[header_start:header_end].decode("utf-8"))
+    raw_header_end = header_start + json_size
+    # ASAR pads the JSON header to a 4-byte boundary before file data.
+    data_start = header_start + ((json_size + 3) & ~3)
+    if raw_header_end > len(original) or data_start > len(original):
+        raise SystemExit("app.asar header size out of bounds")
+    header = json.loads(original[header_start:raw_header_end].decode("utf-8"))
     icon_data = args.icon.read_bytes()
 
     file_blobs: list[bytes] = []

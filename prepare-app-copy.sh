@@ -160,6 +160,10 @@ if [[ -x "$PYTHON_BIN" && -f "$ASAR_ICON_SOURCE" && -f "$INNER_APP/Contents/Reso
   "$PYTHON_BIN" "$ROOT/scripts/patch_asar_icon.py" \
     --asar "$INNER_APP/Contents/Resources/app.asar" \
     --icon "$ASAR_ICON_SOURCE"
+  ASAR_HASH="$(shasum -a 256 "$INNER_APP/Contents/Resources/app.asar" | awk '{print $1}')"
+  /usr/libexec/PlistBuddy \
+    -c "Set :ElectronAsarIntegrity:Resources/app.asar:hash $ASAR_HASH" \
+    "$INNER_APP/Contents/Info.plist" 2>/dev/null || true
 fi
 
 /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier com.google.antigravity.proxy.inner' "$INNER_APP/Contents/Info.plist"
