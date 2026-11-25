@@ -431,7 +431,8 @@ static int connect_to_proxy(int fd) {
 }
 
 static int socks5_read_reply_tail(int fd, uint8_t atyp) {
-  uint8_t skip[256];
+  // Domain replies can be 255 bytes plus a two-byte port.
+  uint8_t skip[257];
   size_t len;
 
   if (atyp == 0x01) {
@@ -445,6 +446,11 @@ static int socks5_read_reply_tail(int fd, uint8_t atyp) {
     }
     len = (size_t)name_len + 2;
   } else {
+    errno = EPROTO;
+    return -1;
+  }
+
+  if (len > sizeof(skip)) {
     errno = EPROTO;
     return -1;
   }

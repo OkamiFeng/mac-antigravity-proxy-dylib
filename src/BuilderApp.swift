@@ -328,7 +328,10 @@ final class RuntimeBuilder {
         progress("Patch Electron 图标...")
         let asar = innerApp.appendingPathComponent("Contents/Resources/app.asar")
         if fileManager.fileExists(atPath: asar.path) {
-            try AsarIconPatcher.patch(asarURL: asar, iconURL: resources.iconPNG)
+            // Keep the original archive byte-for-byte. Rewriting app.asar
+            // changes Electron's package layout and can make it fall back
+            // to default_app.asar. Bundle icons are still updated above.
+            progress("保留原版 app.asar，跳过内部图标替换")
         }
 
         progress("重签名 runtime...")
@@ -591,12 +594,14 @@ enum AsarIconPatcher {
 
         let jsonSize = Int(readUInt32(original, offset: 12))
         let headerStart = 16
-        let headerEnd = headerStart + jsonSize
-        guard headerEnd <= original.count else {
+        let rawHeaderEnd = headerStart + jsonSize
+        let dataStart = headerStart + ((jsonSize + 3) & ~3)
+        guard rawHeaderEnd <= original.count, dataStart <= original.count else {
             throw BuilderError.asarFormat("header size 越界")
         }
 
-        let headerData = original.subdata(in: headerStart..<headerEnd)
+        // ASAR pads the JSON header to a 4-byte boundary before file data.
+        let headerData = original.subdata(in: headerStart..<rawHeaderEnd)
         guard var header = try JSONSerialization.jsonObject(with: headerData) as? [String: Any],
               var files = header["files"] as? [String: Any] else {
             throw BuilderError.asarFormat("无法解析 header")
@@ -611,7 +616,7 @@ enum AsarIconPatcher {
             files: &files,
             prefix: "",
             original: original,
-            dataStart: headerEnd,
+            dataStart: dataStart,
             iconData: iconData,
             blobs: &blobs,
             offset: &offset,
@@ -639,6 +644,38 @@ enum AsarIconPatcher {
             output.append(blob)
         }
         try output.write(to: asarURL, options: .atomic)
+    }
+
+    static func updateElectronIntegrity(asarURL: URL, infoPlistURL: URL) throws {
+        let asarData = try Data(contentsOf: asarURL)
+        let hash = SHA256.hash(data: asarData)
+            .map { String(format: "%02x", $0) }
+            .joined()
+
+        guard let infoData = try? Data(contentsOf: infoPlistURL),
+              var info = try PropertyListSerialization.propertyList(
+                from: infoData,
+                options: [],
+                format: nil
+              ) as? [String: Any] else {
+            throw BuilderError.asarFormat("无法读取 Info.plist")
+        }
+
+        var integrity = info["ElectronAsarIntegrity"] as? [String: Any] ?? [:]
+        var resources = integrity["Resources"] as? [String: Any] ?? [:]
+        var appAsar = resources["app.asar"] as? [String: Any] ?? [:]
+        appAsar["algorithm"] = "SHA256"
+        appAsar["hash"] = hash
+        resources["app.asar"] = appAsar
+        integrity["Resources"] = resources
+        info["ElectronAsarIntegrity"] = integrity
+
+        let updated = try PropertyListSerialization.data(
+            fromPropertyList: info,
+            format: .xml,
+            options: 0
+        )
+        try updated.write(to: infoPlistURL, options: .atomic)
     }
 
     private static func processFiles(
